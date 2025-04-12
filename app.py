@@ -18,7 +18,9 @@ openai.api_key = OPENAI_API_KEY
 # Google Sheetsログ保存用関数
 def log_to_sheet(user_id, message_text):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    credentials_json = os.getenv("GOOGLE_CREDENTIALS")
+　　 credentials_dict = json.loads(credentials_json)
+　　 creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open("相談ログ").sheet1
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
