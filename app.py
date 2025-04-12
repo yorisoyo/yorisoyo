@@ -1,28 +1,44 @@
-
 from flask import Flask, request
 import openai
 import requests
 import json
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import datetime
 
 app = Flask(__name__)
 
+# 環境変数の読み込み
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 openai.api_key = OPENAI_API_KEY
+
+# Google Sheetsログ保存用関数
+def log_to_sheet(user_id, message_text):
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("相談ログ").sheet1
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append_row([now, user_id, message_text])
 
 @app.route("/callback", methods=['POST'])
 def callback():
     body = request.get_json()
-    events = body['events']
+    events = body.get('events', [])
 
     for event in events:
-        if event['type'] == 'message':
+        if event['type'] == 'message' and 'text' in event['message']:
             user_message = event['message']['text']
             reply_token = event['replyToken']
+            user_id = event['source']['userId']
 
+            # ログを記録
+            log_to_sheet(user_id, user_message)
+
+            # GPTで返答生成
             gpt_reply = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
@@ -33,6 +49,7 @@ def callback():
 
             reply_text = gpt_reply['choices'][0]['message']['content']
 
+            # LINEに返信
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
