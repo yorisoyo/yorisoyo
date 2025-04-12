@@ -1,11 +1,21 @@
+import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import datetime
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from openai import OpenAI
 
-import os
-
+def log_to_sheet(user_id, message_text):
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("相談ログ").sheet1
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append_row([now, user_id, message_text])
+    
 app = Flask(__name__)
 
 # 環境変数から読み込む（RailwayのVariable設定で指定）
@@ -34,6 +44,10 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_message = event.message.text
+    user_id = event.source.user_id
+    # 👇 ここに追加！
+     log_to_sheet(user_id, user_message)
+　　　# 以下、返信処理などを続ける
 
     # ChatGPTへ送信（OpenAIのv1対応）
     completion = client.chat.completions.create(
