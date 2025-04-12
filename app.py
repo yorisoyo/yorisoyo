@@ -1,56 +1,38 @@
+
 from flask import Flask, request
 import openai
 import requests
 import json
 import os
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import datetime
 
 app = Flask(__name__)
 
-# 環境変数の読み込み
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 
-# Google Sheetsログ保存用関数
-def log_to_sheet(user_id, message_text):
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    credentials_json = os.getenv("GOOGLE_CREDENTIALS")
-    credentials_dict = json.loads(credentials_json)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open("よりそ夜＿相談ログ").sheet1
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sheet.append_row([now, user_id, message_text])
+openai.api_key = OPENAI_API_KEY
 
 @app.route("/callback", methods=['POST'])
 def callback():
     body = request.get_json()
-    events = body.get('events', [])
+    events = body['events']
 
     for event in events:
         if event['type'] == 'message':
             user_message = event['message']['text']
             reply_token = event['replyToken']
-            user_id = event['source']['userId']  # ユーザーIDも取得
-
-            log_to_sheet(user_id, user_message)  # ←ここがズレていた！
 
             gpt_reply = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです..."},
+                    {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。"},
                     {"role": "user", "content": user_message}
                 ]
             )
 
-
             reply_text = gpt_reply['choices'][0]['message']['content']
 
-            # LINEに返信
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
