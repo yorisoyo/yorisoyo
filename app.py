@@ -1,6 +1,5 @@
-
 from flask import Flask, request
-import openai
+from openai import OpenAI
 import requests
 import json
 import os
@@ -11,19 +10,21 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+# OpenAIクライアントの初期化
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 @app.route("/callback", methods=['POST'])
 def callback():
     body = request.get_json()
-    events = body['events']
+    events = body.get('events', [])
 
     for event in events:
-        if event['type'] == 'message':
+        if event.get('type') == 'message' and 'text' in event.get('message', {}):
             user_message = event['message']['text']
             reply_token = event['replyToken']
 
-            gpt_reply = openai.ChatCompletion.create(
+            # GPT-4 に問い合わせる
+            response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。"},
@@ -31,8 +32,9 @@ def callback():
                 ]
             )
 
-            reply_text = gpt_reply['choices'][0]['message']['content']
+            reply_text = response.choices[0].message.content
 
+            # LINEに返信
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
