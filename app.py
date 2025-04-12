@@ -22,7 +22,7 @@ def log_to_sheet(user_id, message_text):
 　　 credentials_dict = json.loads(credentials_json)
 　　 creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
     client = gspread.authorize(creds)
-    sheet = client.open("相談ログ").sheet1
+    sheet = client.open("よりそ夜＿相談ログ").sheet1
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sheet.append_row([now, user_id, message_text])
 
