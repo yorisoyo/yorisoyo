@@ -15,6 +15,7 @@ def log_to_sheet(user_id, message_text):
     sheet = client.open("相談ログ").sheet1
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sheet.append_row([now, user_id, message_text])
+
     
 app = Flask(__name__)
 
