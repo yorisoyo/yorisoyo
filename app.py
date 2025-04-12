@@ -30,22 +30,21 @@ def callback():
     events = body.get('events', [])
 
     for event in events:
-        if event['type'] == 'message' and 'text' in event['message']:
+        if event['type'] == 'message':
             user_message = event['message']['text']
             reply_token = event['replyToken']
-            user_id = event['source']['userId']
+            user_id = event['source']['userId']  # ユーザーIDも取得
 
-            # ログを記録
-            log_to_sheet(user_id, user_message)
+            log_to_sheet(user_id, user_message)  # ←ここがズレていた！
 
-            # GPTで返答生成
             gpt_reply = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。"},
+                    {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです..."},
                     {"role": "user", "content": user_message}
                 ]
             )
+
 
             reply_text = gpt_reply['choices'][0]['message']['content']
 
