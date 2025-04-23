@@ -5,17 +5,21 @@ import os
 
 app = Flask(__name__)
 
-# 環境変数
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# OpenAI新SDKクライアント（v1以降）
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# 400文字ごとに分割（LINEの安定上限）
-def split_message_by_length(message, max_chars=400):
-    chunks = [message[i:i + max_chars] for i in range(0, len(message), max_chars)]
-    return chunks[:5]  # LINEのreplyは最大5通
+# 3行ごとに分割し、最大5通まで返す
+def split_message_by_lines(message, max_lines=3, max_messages=5):
+    lines = message.split('\n')
+    chunks = []
+    for i in range(0, len(lines), max_lines):
+        chunk = '\n'.join(lines[i:i + max_lines])
+        chunks.append(chunk)
+        if len(chunks) >= max_messages:
+            break
+    return chunks
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -28,7 +32,6 @@ def callback():
                 user_message = event['message']['text']
                 reply_token = event['replyToken']
 
-                # GPTへの問い合わせ（OpenAI SDK v1対応）
                 response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
@@ -38,7 +41,7 @@ def callback():
                 )
 
                 reply_text = response.choices[0].message.content
-                messages = split_message_by_length(reply_text)
+                messages = split_message_by_lines(reply_text)
 
                 headers = {
                     "Content-Type": "application/json",
