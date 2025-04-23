@@ -10,15 +10,18 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# 3行ごとに分割し、最大5通まで返す
-def split_message_by_lines(message, max_lines=3, max_messages=5):
-    lines = message.split('\n')
+# 200字以内に分割（最大4通）
+def split_message_by_chars(text, max_chars=200, max_messages=4):
     chunks = []
-    for i in range(0, len(lines), max_lines):
-        chunk = '\n'.join(lines[i:i + max_lines])
-        chunks.append(chunk)
-        if len(chunks) >= max_messages:
-            break
+    while text and len(chunks) < max_messages:
+        chunk = text[:max_chars]
+        # 可能なら句点・読点などの自然な区切りで切る
+        for i in reversed(range(1, len(chunk))):
+            if chunk[i] in '。！？.,、':
+                chunk = chunk[:i + 1]
+                break
+        chunks.append(chunk.strip())
+        text = text[len(chunk):].lstrip()
     return chunks
 
 @app.route("/callback", methods=['POST'])
@@ -35,13 +38,13 @@ def callback():
                 response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。"},
+                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。返答は200字以内で、複数回に分けてください。"},
                         {"role": "user", "content": user_message}
                     ]
                 )
 
                 reply_text = response.choices[0].message.content
-                messages = split_message_by_lines(reply_text)
+                messages = split_message_by_chars(reply_text)
 
                 headers = {
                     "Content-Type": "application/json",
