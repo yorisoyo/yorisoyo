@@ -5,18 +5,18 @@ import os
 
 app = Flask(__name__)
 
-# 環境変数からトークンとキーを取得
+# 環境変数
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+# 新しいOpenAIクライアント
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# 3行ごとにメッセージを分割（最大5メッセージ制限あり）
+# 3行分割（最大5件）
 def split_message_by_lines(message, lines_per_chunk=3):
     lines = message.split('\n')
     chunks = ['\n'.join(lines[i:i + lines_per_chunk]) for i in range(0, len(lines), lines_per_chunk)]
-    return chunks[:5]  # LINEのreplyは最大5通
+    return chunks[:5]
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -29,16 +29,16 @@ def callback():
                 user_message = event['message']['text']
                 reply_token = event['replyToken']
 
-                # GPT-4へ問い合わせ
-                gpt_reply = openai.ChatCompletion.create(
+                # 新SDK形式でGPTへ問い合わせ
+                response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。"},
+                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。..."},
                         {"role": "user", "content": user_message}
                     ]
                 )
 
-                reply_text = gpt_reply['choices'][0]['message']['content']
+                reply_text = response.choices[0].message.content
                 messages = split_message_by_lines(reply_text)
 
                 headers = {
@@ -51,23 +51,15 @@ def callback():
                     "messages": [{"type": "text", "text": msg} for msg in messages]
                 }
 
-                # メッセージ送信
-                response = requests.post(
-                    "https://api.line.me/v2/bot/message/reply",
-                    headers=headers,
-                    json=payload
-                )
-
-                # エラーチェック
-                if response.status_code != 200:
-                    print("LINE API エラー:", response.status_code, response.text)
+                res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=payload)
+                if res.status_code != 200:
+                    print("LINE返信エラー:", res.status_code, res.text)
 
         return 'OK'
 
     except Exception as e:
-        print("サーバー内エラー:", e)
+        print("サーバーエラー:", e)
         return 'Internal Server Error', 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-    
