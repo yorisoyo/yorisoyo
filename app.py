@@ -10,27 +10,31 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# 200字ごとに分割。最低2通、最大4通送信。
-def split_message_fixed_range(text, max_chars=200, min_messages=2, max_messages=4):
+# 「。」で区切り、200字以内かつ2〜4通に調整
+def split_message_by_sentences(text, max_chars=200, min_messages=2, max_messages=4):
+    sentences = text.split("。")
+    sentences = [s.strip() + "。" for s in sentences if s.strip()]
     chunks = []
-    text = text.strip()
-    while text and len(chunks) < max_messages:
-        chunk = text[:max_chars]
-        # 句読点で自然に切る
-        for i in reversed(range(1, len(chunk))):
-            if chunk[i] in '。！？.,、':
-                chunk = chunk[:i + 1]
-                break
-        chunks.append(chunk.strip())
-        text = text[len(chunk):].lstrip()
+    current = ""
 
-    # 足りないときは分割を荒くしてでも2通にする
-    if len(chunks) < min_messages:
-        midpoint = len(chunks[0]) // 2
-        chunks = [
-            chunks[0][:midpoint].strip(),
-            chunks[0][midpoint:].strip()
-        ] + chunks[1:]
+    for sentence in sentences:
+        if len(current) + len(sentence) <= max_chars:
+            current += sentence
+        else:
+            if current:
+                chunks.append(current.strip())
+            current = sentence
+        if len(chunks) >= max_messages:
+            break
+    if current and len(chunks) < max_messages:
+        chunks.append(current.strip())
+
+    # 最低2通になるよう調整
+    if len(chunks) == 1:
+        text = chunks[0]
+        midpoint = len(text) // 2
+        chunks = [text[:midpoint].strip(), text[midpoint:].strip()]
+
     return chunks[:max_messages]
 
 @app.route("/callback", methods=['POST'])
@@ -47,13 +51,13 @@ def callback():
                 response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。返答は1つあたり200字以内にしてください。"},
+                        {"role": "system", "content": "あなたは『よりそ夜』のAIしずくです。つらい人の話をやさしく聞き、安心できる言葉で返してください。死にたいと言われたら、『あなたの命は大切です』『ここにいていいんですよ』と伝えてください。返答は200字以内で、文を「。」で区切って自然な形で複数通にしてください。"},
                         {"role": "user", "content": user_message}
                     ]
                 )
 
                 reply_text = response.choices[0].message.content
-                messages = split_message_fixed_range(reply_text)
+                messages = split_message_by_sentences(reply_text)
 
                 headers = {
                     "Content-Type": "application/json",
